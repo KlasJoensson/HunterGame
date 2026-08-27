@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include <lvgl.h>
 
@@ -28,7 +29,7 @@ static struct gpio_callback button_callback_left;
 static struct gpio_callback button_callback_up;
 static struct gpio_callback button_callback_down;
 
-/* Move cirkle left */
+/* Move circle left */
 static void button_left_callback(const struct device *port,
 								struct gpio_callback *cb,
 								uint32_t pins)
@@ -38,9 +39,13 @@ static void button_left_callback(const struct device *port,
 	ARG_UNUSED(pins);
 
 	offset_x -= 10;
+	int max_offset = (int)(sqrt(14400 - pow(offset_y, 2)));
+	if (offset_x < -max_offset) {
+		offset_x = max_offset;
+	}
 }
 
-/* Move cirkle right */
+/* Move circle right */
 static void button_right_callback(const struct device *port,
 								struct gpio_callback *cb,
 								uint32_t pins)
@@ -50,9 +55,13 @@ static void button_right_callback(const struct device *port,
 	ARG_UNUSED(pins);
 
 	offset_x += 10;
+	int max_offset = (int)(sqrt(14400 - pow(offset_y, 2)));
+	if (offset_x > max_offset) {
+		offset_x = -max_offset;
+	}
 }
 
-/* Move cirkle up */
+/* Move circle up */
 static void button_up_callback(const struct device *port,
 								struct gpio_callback *cb,
 								uint32_t pins)
@@ -62,9 +71,13 @@ static void button_up_callback(const struct device *port,
 	ARG_UNUSED(pins);
 
 	offset_y -= 10;
+	int max_offset = (int)(sqrt(14400 - pow(offset_x, 2)));
+	if (offset_y < -max_offset) {
+		offset_y = max_offset;
+	}
 }
 
-/* Move cirkle down */
+/* Move circle down */
 static void button_down_callback(const struct device *port,
 								struct gpio_callback *cb,
 								uint32_t pins)
@@ -74,6 +87,10 @@ static void button_down_callback(const struct device *port,
 	ARG_UNUSED(pins);
 
 	offset_y += 10;
+	int max_offset = (int)(sqrt(14400 - pow(offset_x, 2)));
+	if (offset_y > max_offset) {
+		offset_y = -max_offset;
+	}
 }
 
 int main(void)
@@ -225,7 +242,8 @@ int main(void)
 	while (1) {
 		
 		lv_obj_align(circle, LV_ALIGN_CENTER, offset_x, offset_y);
-		
+		sprintf(count_str, "%d", offset_y);
+		lv_label_set_text(count_label, count_str);
 		/* To update the display, call the LVGL timer handler */
 		lv_timer_handler();
 		/* Increment the time count */
