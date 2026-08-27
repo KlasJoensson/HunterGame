@@ -1,0 +1,66 @@
+/*
+ * Overlay wiring a GC9A01 1.28" round SPI display (240x240)
+ * to the nRF52840 DK Arduino header.
+ *
+ * Wiring (display pin -> nRF52840 DK header / signal):
+ *   SCL / SCK  -> P1.15 vit
+ *   SDA / MOSI -> P1.13 orange
+ *   CS         -> P1.12 gul
+ *   DC         -> P1.11 brun
+ *   RST        -> P1.10 lila
+ *   VCC        -> VDD  (3*V3) röd
+ *   GND        -> GND grå
+ */
+#include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <freq.h>
+
+/* TODO 2: Enable Arduino SPI and configure it for GC9x01x LCD
+ * Hint: Use the &arduino_spi node and set status to "okay"
+ * Set the chip select cs-gpios property to <&gpio1 12 GPIO_ACTIVE_LOW>
+ * Add a child node mipi_dbi with compatible "zephyr,mipi-dbi-spi"
+ * Set the spi-dev property to <&arduino_spi>
+ * Set the dc-gpios property to <&gpio1 11 GPIO_ACTIVE_HIGH>
+ * Set the reset-gpios property to <&gpio1 10 GPIO_ACTIVE_LOW>
+ * Set #address-cells to <1> and #size-cells to <0>
+ * Set write-only property
+ * Add a child node     gc9x01x_lcd     with compatible "galaxycore,gc9x01x"
+ * Set LCD address reg to <0>
+ * Set mipi-max-frequency to <DT_FREQ_M(20)>
+ * Set pixel-format to <PANEL_PIXEL_FORMAT_RGB_565>
+ * Set width to <240> and height to <240>
+ * Add display-inversion property
+ */
+ &arduino_spi {
+    status = "okay";
+    cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;         /* Chip Select pin */
+
+    mipi_dbi: mipi_dbi_spi {
+        compatible = "zephyr,mipi-dbi-spi";
+        spi-dev = <&arduino_spi>;
+        dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;    /* Data/Command pin */
+        reset-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;  /* Reset pin */
+        #address-cells = <1>;
+        #size-cells = <0>;
+        write-only;
+
+        gc9x01x_lcd: gc9x01x_lcd@0 {
+            compatible = "galaxycore,gc9x01x";
+            reg = <0>;
+            mipi-max-frequency = <DT_FREQ_M(20)>;    /* Adjust maximum SPI clock frequency */
+            pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+            width = <240>;
+            height = <240>;
+            display-inversion;
+        };
+    };
+};
+
+/* TODO 3: Set the pointer to gc9x01x_lcd to be the display of choice */
+/ {
+    chosen {
+        zephyr,display = &gc9x01x_lcd;
+	};
+};
+
+
