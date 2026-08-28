@@ -22,10 +22,13 @@ LOG_MODULE_REGISTER(main);
 static uint32_t time_count;
 static uint32_t hit_count = 0;
 static int32_t offset[2] = {0, 0};
-static int has_new_circle = 0;
-lv_obj_t *circle2 = NULL;
+static int has_food = 0;
+static int is_hunter_active = 0;
+lv_obj_t *food = NULL;
+lv_obj_t *hunter = NULL;
 // Food coordinates let's say the food is at (1000, 1000) which is outside the display when not displayed.
 static int food_coordinates[2] = {1000, 1000};
+static int hunter_coordinates[2] = {1000, 1000};
 
 static struct gpio_dt_spec right_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw1), gpios, {0});
 static struct gpio_dt_spec left_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw2), gpios, {0});
@@ -100,28 +103,34 @@ static void button_down_callback(const struct device *port,
 	}
 }
 
-static void show_new_circle() {
-	if (!has_new_circle) {
-		has_new_circle = 1;
-		circle2 = lv_obj_create(lv_screen_active());
-		lv_obj_set_size(circle2, 15, 15);
-		lv_obj_set_style_radius(circle2, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+static void show_food() {
+	if (food == NULL) {
+		has_food = 1;
+		food = lv_obj_create(lv_screen_active());
+		lv_obj_set_size(food, 15, 15);
+		lv_obj_set_style_radius(food, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 	}
 	int  y = rand() % 241 - 120; // Random y offset between -120 and 120
 	int max_offset = (int)(sqrt(14400 - pow(y, 2)));
 	int x = rand() % (2 * max_offset + 1) - max_offset; // Random x offset based on y 
-	lv_obj_align(circle2, LV_ALIGN_CENTER, x, y);
+	lv_obj_align(food, LV_ALIGN_CENTER, x, y);
 	food_coordinates[0] = x;
 	food_coordinates[1] = y;
 	LOG_INF("New circle at [%d, %d].", x, y);
 }
 
 static int check_collision() {
-	int dx = offset[0] - food_coordinates[0];
-	int dy = offset[1] - food_coordinates[1];
+	int dx;
+	int dy;
+	if (food_coordinates[0] == 1000 && !(hunter_coordinates[0] > 500)) {
+		dx = offset[0] - hunter_coordinates[0];
+		dy = offset[1] - hunter_coordinates[1];
+	} else {
+		dx = offset[0] - food_coordinates[0];
+		dy = offset[1] - food_coordinates[1];
+	}
 	int distance_squared = dx * dx + dy * dy;
 	if (distance_squared <= 100) { // 10^2 = 100
-		hit_count++;
 		return 1; // Collision detected
 	} else {
 		return 0; // No collision
@@ -130,13 +139,37 @@ static int check_collision() {
 }
 
 // Move new circle out of view when it is not displayed
-static void hide_new_circle() {
-	if (has_new_circle) {
+static void hide_food() {
+	if (has_food) {
 		food_coordinates[0] = 1000; // Move food coordinates out of view
 		food_coordinates[1] = 1000;
-		lv_obj_align(circle2, LV_ALIGN_CENTER, food_coordinates[0], food_coordinates[1]);
+		lv_obj_align(food, LV_ALIGN_CENTER, food_coordinates[0], food_coordinates[1]);
 		LOG_INF("New circle hidden.");
 	}
+}
+
+static void create_hunter() {
+	// create a square at the same place as the circle to represent the hunter
+	if (hunter == NULL) {
+		hunter = lv_obj_create(lv_screen_active());
+		lv_obj_set_size(hunter, 20, 20);
+		lv_obj_set_style_radius(hunter, 0, LV_PART_MAIN);
+	} 
+	hunter_coordinates[0] = food_coordinates[0];
+	hunter_coordinates[1] = food_coordinates[1];
+	hide_food();
+	is_hunter_active = 1;
+	lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
+}
+
+static void remove_hunter() {
+	if (hunter != NULL) {
+		lv_obj_del(hunter);
+		hunter = NULL;
+	}
+	is_hunter_active = 0;
+	hunter_coordinates[0] = 1000; // Move hunter coordinates out of view
+	hunter_coordinates[1] = 1000;
 }
 
 int main(void)
@@ -297,22 +330,47 @@ int main(void)
 		lv_timer_handler();
 		/* Increment the time count */
 		++time_count;
-		if (food_coordinates[0] == 1000 && time_count >= 1000) {
-			show_new_circle();
-			time_count = 0;
+		if (time_count == 1000) {
+			show_food();
 			LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
-		} else {
-			if (check_collision()) {
-				LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
-				hide_new_circle();
+		} else if (time_count == 1500) {
+				create_hunter();
+				LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
+		} else if (time_count == 2000) {
+				remove_hunter();
 				time_count = 0;
+				LOG_INF("Hunter removed.");
+		} else {
+			if (check_collision()) {			
+				if (is_hunter_active) {
+					LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
+					remove_hunter();
+					hit_count--;
+					time_count = 0;
+				} else {
+					LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
+					hide_food();
+					hit_count++;
+					time_count = 0;
+				}	
+			} else if (is_hunter_active) {
+				// move the hunter one pxel closer to the circle
+				if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
+					if (hunter_coordinates[0] < offset[0]) {
+						hunter_coordinates[0]++;
+					} else if (hunter_coordinates[0] > offset[0]) {
+						hunter_coordinates[0]--;
+					}
+					if (hunter_coordinates[1] < offset[1]) {
+						hunter_coordinates[1]++;
+					} else if (hunter_coordinates[1] > offset[1]) {
+						hunter_coordinates[1]--;
+					}
+				}
+				lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
 			} 
 		}
-		// Create the first new circle after 1000 loops (~10 seconds) if it hasn't been created yet
-		if (!has_new_circle && time_count >= 1000) {
-			show_new_circle();
-			time_count = 0;
-		} 
+
 		/* Delay for 9.501 ms - each loop will represent ~10 ms */
 		k_sleep(K_USEC(9501));
 	}
