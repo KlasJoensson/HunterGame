@@ -42,8 +42,7 @@ static struct gpio_callback button_callback_down;
 /* Move circle left */
 static void button_left_callback(const struct device *port,
 								struct gpio_callback *cb,
-								uint32_t pins)
-{
+								uint32_t pins) {
 	ARG_UNUSED(port);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
@@ -58,8 +57,7 @@ static void button_left_callback(const struct device *port,
 /* Move circle right */
 static void button_right_callback(const struct device *port,
 								struct gpio_callback *cb,
-								uint32_t pins)
-{
+								uint32_t pins) {
 	ARG_UNUSED(port);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
@@ -74,8 +72,7 @@ static void button_right_callback(const struct device *port,
 /* Move circle up */
 static void button_up_callback(const struct device *port,
 								struct gpio_callback *cb,
-								uint32_t pins)
-{
+								uint32_t pins) {
 	ARG_UNUSED(port);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
@@ -90,8 +87,7 @@ static void button_up_callback(const struct device *port,
 /* Move circle down */
 static void button_down_callback(const struct device *port,
 								struct gpio_callback *cb,
-								uint32_t pins)
-{
+								uint32_t pins) {
 	ARG_UNUSED(port);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
@@ -172,22 +168,7 @@ static void remove_hunter() {
 	hunter_coordinates[1] = 1000;
 }
 
-int main(void)
-{
-	char count_str[11] = {0};
-	const struct device *display_dev;
-	static lv_style_t my_style;
-	lv_obj_t *count_label;
-	int ret;
-	srand(time(NULL));
-
-	/* Check if the display device is ready	 */
-	display_dev =  DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-	if (!device_is_ready(display_dev)) {
-		LOG_ERR("Display device is not ready");
-		return 0;
-	}
-
+static int configure_left_button() {
 	/* Setup button 1 to clear the time count */
 	if (gpio_is_ready_dt(&left_button)) {
 		int err;
@@ -195,105 +176,198 @@ int main(void)
 		err = gpio_pin_configure_dt(&left_button, GPIO_INPUT);
 		if (err) {
 			LOG_ERR("Failed to configure button gpio: %d", err);
-			return 0;
+			return -1;
 		}
 
-		gpio_init_callback(&button_callback_left, button_left_callback,
-				   		   BIT(left_button.pin));
+		gpio_init_callback(&button_callback_left, button_left_callback, 
+			BIT(left_button.pin));
+				   		   
 
 		err = gpio_add_callback(left_button.port, &button_callback_left);
 		if (err) {
 			LOG_ERR("Failed to add button callback: %d", err);
-			return 0;
+			return -1;
 		}
 
 		err = gpio_pin_interrupt_configure_dt(&left_button,
 						      				  GPIO_INT_EDGE_TO_ACTIVE);
 		if (err) {
 			LOG_ERR("Failed to enable button callback: %d", err);
-			return 0;
+			return -1;
 		}
+	} else {
+		LOG_ERR("Button device %s is not ready", left_button.port->name);
+		return -1;
 	}
 
+	return 0;
+}
+
+static int configure_right_button() {
+	/* Setup button 1 to clear the time count */
 	if (gpio_is_ready_dt(&right_button)) {
 		int err;
 
 		err = gpio_pin_configure_dt(&right_button, GPIO_INPUT);
 		if (err) {
 			LOG_ERR("Failed to configure button gpio: %d", err);
-			return 0;
+			return -1;
 		}
 
-		gpio_init_callback(&button_callback_right, button_right_callback,
-				   		   BIT(right_button.pin));
+		gpio_init_callback(&button_callback_right, button_right_callback, 
+			BIT(right_button.pin));
+				   		   
 
 		err = gpio_add_callback(right_button.port, &button_callback_right);
 		if (err) {
 			LOG_ERR("Failed to add button callback: %d", err);
-			return 0;
+			return -1;
 		}
 
 		err = gpio_pin_interrupt_configure_dt(&right_button,
 						      				  GPIO_INT_EDGE_TO_ACTIVE);
 		if (err) {
 			LOG_ERR("Failed to enable button callback: %d", err);
-			return 0;
+			return -1;
 		}
+	} else {
+		LOG_ERR("Button device %s is not ready", right_button.port->name);
+		return -1;
 	}
 
+	return 0;
+}
+
+static int configure_up_button() {
+	/* Setup button 1 to clear the time count */
 	if (gpio_is_ready_dt(&up_button)) {
 		int err;
 
 		err = gpio_pin_configure_dt(&up_button, GPIO_INPUT);
 		if (err) {
 			LOG_ERR("Failed to configure button gpio: %d", err);
-			return 0;
+			return -1;
 		}
 
-		gpio_init_callback(&button_callback_up, button_up_callback,
-				   		   BIT(up_button.pin));
+		gpio_init_callback(&button_callback_up, button_up_callback, 
+			BIT(up_button.pin));
+				   		   
 
 		err = gpio_add_callback(up_button.port, &button_callback_up);
 		if (err) {
 			LOG_ERR("Failed to add button callback: %d", err);
-			return 0;
+			return -1;
 		}
 
 		err = gpio_pin_interrupt_configure_dt(&up_button,
 						      				  GPIO_INT_EDGE_TO_ACTIVE);
 		if (err) {
 			LOG_ERR("Failed to enable button callback: %d", err);
-			return 0;
+			return -1;
 		}
+	} else {
+		LOG_ERR("Button device %s is not ready", up_button.port->name);
+		return -1;
 	}
 
-	if (gpio_is_ready_dt(&down_button)) {
-		srand(time(NULL));
+	return 0;
+}
 
+static int configure_down_button() {
+	/* Setup button 1 to clear the time count */
+	if (gpio_is_ready_dt(&down_button)) {
 		int err;
 
 		err = gpio_pin_configure_dt(&down_button, GPIO_INPUT);
 		if (err) {
 			LOG_ERR("Failed to configure button gpio: %d", err);
-			return 0;
+			return -1;
 		}
 
-		gpio_init_callback(&button_callback_down, button_down_callback,
-				   		   BIT(down_button.pin));
+		gpio_init_callback(&button_callback_down, button_down_callback, 
+			BIT(down_button.pin));
+				   		   
 
 		err = gpio_add_callback(down_button.port, &button_callback_down);
 		if (err) {
 			LOG_ERR("Failed to add button callback: %d", err);
-			return 0;
+			return -1;
 		}
 
 		err = gpio_pin_interrupt_configure_dt(&down_button,
 						      				  GPIO_INT_EDGE_TO_ACTIVE);
 		if (err) {
 			LOG_ERR("Failed to enable button callback: %d", err);
-			return 0;
+			return -1;
 		}
+	} else {
+		LOG_ERR("Button device %s is not ready", down_button.port->name);
+		return -1;
 	}
+
+	return 0;
+}
+
+static int configure_device() {
+	int ret;
+	const struct device *display_dev;
+	/* Check if the display device is ready	 */
+	display_dev =  DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+	if (!device_is_ready(display_dev)) {
+		LOG_ERR("Display device is not ready");
+		return -1;
+	}
+	/* Turn off display blanking to ensure the display is active
+	 * Check the return value and if it is less than 0 and not equal to -ENOSYS,
+	 * log an error message and return 0
+	 */
+	ret = display_blanking_off(display_dev);
+	if (ret < 0 && ret != -ENOSYS) {
+		LOG_ERR("Failed to turn blanking off (error %d)", ret);
+		return -1;
+	}
+
+	/*configure left btn*/
+	ret = configure_left_button();
+	if (ret < 0) {
+		LOG_ERR("Failed to configure left button");
+		return -1;
+	}
+	/*configure right btn*/
+	ret = configure_right_button();
+	if (ret < 0) {
+		LOG_ERR("Failed to configure right button");
+		return -1;
+	}
+	/*configure up btn*/
+	ret = configure_up_button();
+	if (ret < 0) {
+		LOG_ERR("Failed to configure up button");
+		return -1;
+	}
+	/*configure down btn*/
+	ret = configure_down_button();
+	if (ret < 0) {
+		LOG_ERR("Failed to configure down button");
+		return -1;
+	}
+	
+	LOG_INF("Device successfully configured.");
+
+	return 0;
+}
+
+int main(void) {
+	int ret = configure_device();
+	if (ret < 0) {
+		LOG_ERR("Could not configure the device");
+		return -1;
+	}
+
+	char count_str[11] = {0};	
+	static lv_style_t my_style;
+	lv_obj_t *count_label;
+	srand(time(NULL));
 	
 	lv_style_init(&my_style);
 	lv_style_set_text_font(&my_style, &lv_font_montserrat_28);
@@ -309,16 +383,6 @@ int main(void)
 	lv_obj_align(circle, LV_ALIGN_CENTER, 0, 0);
 
 	lv_timer_handler();
-
-	/* Turn off display blanking to ensure the display is active
-	 * Check the return value and if it is less than 0 and not equal to -ENOSYS,
-	 * log an error message and return 0
-	 */
-	ret = display_blanking_off(display_dev);
-	if (ret < 0 && ret != -ENOSYS) {
-		LOG_ERR("Failed to turn blanking off (error %d)", ret);
-		return 0;
-	}
 
 	/* Loop and display increasing time count */
 	while (1) {
@@ -374,4 +438,6 @@ int main(void)
 		/* Delay for 9.501 ms - each loop will represent ~10 ms */
 		k_sleep(K_USEC(9501));
 	}
+
+	return 0;
 }
