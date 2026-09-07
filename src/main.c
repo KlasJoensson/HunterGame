@@ -32,6 +32,11 @@ static int food_coordinates[2] = {1000, 1000};
 static int hunter_coordinates[2] = {1000, 1000};
 static int use_callback = 0;
 
+char count_str[11] = {0};	
+static lv_style_t my_style;
+lv_obj_t *count_label;
+lv_obj_t *circle;
+
 static struct gpio_dt_spec mode_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw0), gpios, {0});
 static struct gpio_callback button_callback_mode;
 
@@ -234,6 +239,70 @@ static void move_circle() {
 	}	
 }
 
+static void set_up_game() {
+	srand(time(NULL));
+    /* Create a label to display time count and align it at the bottom center */
+	count_label = lv_label_create(lv_screen_active());
+	lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+	/* Draw a 25px diameter circle in the middle of the display */
+	circle = lv_obj_create(lv_screen_active());
+	lv_obj_set_size(circle, 25, 25);
+	lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+	lv_obj_align(circle, LV_ALIGN_CENTER, 0, 0);
+}
+
+static void play_game() {
+	move_circle();
+	lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);
+	sprintf(count_str, "%d", hit_count);
+	lv_label_set_text(count_label, count_str);
+	/* To update the display, call the LVGL timer handler */
+	lv_timer_handler();
+	/* Increment the time count */
+	++time_count;
+	if (time_count == 1000) {
+		show_food();
+		LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
+	} else if (time_count == 1500) {
+			create_hunter();
+			LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
+	} else if (time_count == 2000) {
+			remove_hunter();
+			time_count = 0;
+			LOG_INF("Hunter removed.");
+	} else {
+		if (check_collision()) {			
+			if (is_hunter_active) {
+				LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
+				remove_hunter();
+				hit_count--;
+				time_count = 0;
+			} else {
+				LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
+				hide_food();
+				hit_count++;
+				time_count = 0;
+			}	
+		} else if (is_hunter_active) {
+			// move the hunter one pxel closer to the circle
+			if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
+				if (hunter_coordinates[0] < offset[0]) {
+					hunter_coordinates[0]++;
+				} else if (hunter_coordinates[0] > offset[0]) {
+					hunter_coordinates[0]--;
+				}
+				if (hunter_coordinates[1] < offset[1]) {
+					hunter_coordinates[1]++;
+				} else if (hunter_coordinates[1] > offset[1]) {
+					hunter_coordinates[1]--;
+				}
+			}
+			lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
+		} 
+	}
+}
+
 int main(void) {
 	int ret = configure_device();
 	if (ret < 0) {
@@ -246,76 +315,16 @@ int main(void) {
 		return -1;
 	}
 
-	char count_str[11] = {0};	
-	static lv_style_t my_style;
-	lv_obj_t *count_label;
-	srand(time(NULL));
-	
 	lv_style_init(&my_style);
 	lv_style_set_text_font(&my_style, &lv_font_montserrat_28);
 
-	/* Create a label to display time count and align it at the bottom center */
-	count_label = lv_label_create(lv_screen_active());
-	lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
-
-	/* Draw a 25px diameter circle in the middle of the display */
-	lv_obj_t *circle = lv_obj_create(lv_screen_active());
-	lv_obj_set_size(circle, 25, 25);
-	lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-	lv_obj_align(circle, LV_ALIGN_CENTER, 0, 0);
+	set_up_game();
 
 	lv_timer_handler();
 
 	/* Loop and display increasing time count */
 	while (1) {
-		move_circle();
-		lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);
-		sprintf(count_str, "%d", hit_count);
-		lv_label_set_text(count_label, count_str);
-		/* To update the display, call the LVGL timer handler */
-		lv_timer_handler();
-		/* Increment the time count */
-		++time_count;
-		if (time_count == 1000) {
-			show_food();
-			LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
-		} else if (time_count == 1500) {
-				create_hunter();
-				LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
-		} else if (time_count == 2000) {
-				remove_hunter();
-				time_count = 0;
-				LOG_INF("Hunter removed.");
-		} else {
-			if (check_collision()) {			
-				if (is_hunter_active) {
-					LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
-					remove_hunter();
-					hit_count--;
-					time_count = 0;
-				} else {
-					LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
-					hide_food();
-					hit_count++;
-					time_count = 0;
-				}	
-			} else if (is_hunter_active) {
-				// move the hunter one pxel closer to the circle
-				if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
-					if (hunter_coordinates[0] < offset[0]) {
-						hunter_coordinates[0]++;
-					} else if (hunter_coordinates[0] > offset[0]) {
-						hunter_coordinates[0]--;
-					}
-					if (hunter_coordinates[1] < offset[1]) {
-						hunter_coordinates[1]++;
-					} else if (hunter_coordinates[1] > offset[1]) {
-						hunter_coordinates[1]--;
-					}
-				}
-				lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
-			} 
-		}
+		play_game();
 
 		/* Delay for 9.501 ms - each loop will represent ~10 ms */
 		k_sleep(K_USEC(9501));
