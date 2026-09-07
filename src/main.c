@@ -240,9 +240,9 @@ int main(void) {
 		LOG_ERR("Could not configure the device");
 		return -1;
 	}
-	ret = configure_receiver();
+	ret = configure_joystick();
 	if (ret < 0) {
-		LOG_ERR("Could not configure the receiver");
+		LOG_ERR("Could not configure the joystick");
 		return -1;
 	}
 

@@ -1,8 +1,8 @@
-#ifndef RECEIVER_H
-#define RECEIVER_H
+#ifndef JOYSTICK_H
+#define JOYSTICK_H
 
-int configure_receiver(void);
+int configure_joystick(void);
 int get_pin_status(void);
 int get_status(void);
 
-#endif // RECEIVER_H
+#endif // JOYSTICK_H

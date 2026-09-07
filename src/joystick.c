@@ -240,7 +240,7 @@ int get_pin_status(void) {
 	return result;
 }
 
-int configure_receiver(void) {
+int configure_joystick(void) {
 	int err;
 	if (gpio_is_ready_dt(&stick_up)) {
 		
