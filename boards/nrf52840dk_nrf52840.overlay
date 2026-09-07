@@ -10,6 +10,18 @@
  *   RST        -> P1.10 lila
  *   VCC        -> VDD  (3*V3) röd
  *   GND        -> GND grå
+ *
+ * Wiring for the joystick buttons:
+ *   1 (Up)    -> P1.05
+ *   2 (Down)  -> P1.06
+ *   3 (Left)  -> P1.07
+ *   4 (Right) -> P1.08
+ *   6 (Button)-> P1.04
+ *
+ * Pin-layout on the serial contact:
+ * ___________
+ * \5 4 3 2 1/
+ *  \9_8_7_6/
  */
 #include <zephyr/dt-bindings/display/panel.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
@@ -60,6 +72,43 @@
 / {
     chosen {
         zephyr,display = &gc9x01x_lcd;
+	};
+
+    joystick {
+		compatible = "gpio-keys";
+
+		up: up {
+			gpios = <&gpio1 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push up";
+		};
+
+		down: down {
+			gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push down";
+		};
+
+		left: left {
+			gpios = <&gpio1 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push left";
+		};
+
+		right: right {
+			gpios = <&gpio1 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push right";
+		};
+
+        button: button {
+			gpios = <&gpio1 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push button";
+		};
+	};
+
+    aliases {
+		jsup = &up;
+		jsdown = &down;
+		jsleft = &left;
+		jsright = &right;
+		jsbtn = &button;
 	};
 };
 

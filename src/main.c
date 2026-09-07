@@ -14,6 +14,7 @@
 
 
 #include <lvgl.h>
+#include "joystick.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 
@@ -29,24 +30,14 @@ lv_obj_t *hunter = NULL;
 // Food coordinates let's say the food is at (1000, 1000) which is outside the display when not displayed.
 static int food_coordinates[2] = {1000, 1000};
 static int hunter_coordinates[2] = {1000, 1000};
+static int use_callback = 0;
 
-static struct gpio_dt_spec right_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw1), gpios, {0});
-static struct gpio_dt_spec left_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw2), gpios, {0});
-static struct gpio_dt_spec up_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw0), gpios, {0});
-static struct gpio_dt_spec down_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw3), gpios, {0});
-static struct gpio_callback button_callback_right;
-static struct gpio_callback button_callback_left;
-static struct gpio_callback button_callback_up;
-static struct gpio_callback button_callback_down;
+static struct gpio_dt_spec mode_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw0), gpios, {0});
+static struct gpio_callback button_callback_mode;
+
 
 /* Move circle left */
-static void button_left_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
+static void move_circle_left() {
 	offset[0] -= 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[1], 2)));
 	if (offset[0] < -max_offset) {
@@ -55,13 +46,7 @@ static void button_left_callback(const struct device *port,
 }
 
 /* Move circle right */
-static void button_right_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
+static void move_circle_right() {
 	offset[0] += 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[1], 2)));
 	if (offset[0] > max_offset) {
@@ -70,13 +55,7 @@ static void button_right_callback(const struct device *port,
 }
 
 /* Move circle up */
-static void button_up_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
+static void move_circle_up() {
 	offset[1] -= 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[0], 2)));
 	if (offset[1] < -max_offset) {
@@ -85,18 +64,22 @@ static void button_up_callback(const struct device *port,
 }
 
 /* Move circle down */
-static void button_down_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
+static void move_circle_down() {
 	offset[1] += 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[0], 2)));
 	if (offset[1] > max_offset) {
 		offset[1] = -max_offset;
 	}
+}
+
+static void button_mode_callback(const struct device *port,
+								struct gpio_callback *cb,
+								uint32_t pins) {
+	ARG_UNUSED(port);
+	ARG_UNUSED(cb);
+	ARG_UNUSED(pins);
+	use_callback = !use_callback;
+	LOG_INF("Use callback: %d", use_callback);
 }
 
 static void show_food() {
@@ -168,140 +151,32 @@ static void remove_hunter() {
 	hunter_coordinates[1] = 1000;
 }
 
-static int configure_left_button() {
-	/* Setup button 1 to clear the time count */
-	if (gpio_is_ready_dt(&left_button)) {
-		int err;
-
-		err = gpio_pin_configure_dt(&left_button, GPIO_INPUT);
-		if (err) {
-			LOG_ERR("Failed to configure button gpio: %d", err);
-			return -1;
-		}
-
-		gpio_init_callback(&button_callback_left, button_left_callback, 
-			BIT(left_button.pin));
-				   		   
-
-		err = gpio_add_callback(left_button.port, &button_callback_left);
-		if (err) {
-			LOG_ERR("Failed to add button callback: %d", err);
-			return -1;
-		}
-
-		err = gpio_pin_interrupt_configure_dt(&left_button,
-						      				  GPIO_INT_EDGE_TO_ACTIVE);
-		if (err) {
-			LOG_ERR("Failed to enable button callback: %d", err);
-			return -1;
-		}
-	} else {
-		LOG_ERR("Button device %s is not ready", left_button.port->name);
+static int configure_mode_button() {
+	int err;
+	if (!gpio_is_ready_dt(&mode_button)) {
+		LOG_ERR("Mode button %s is not ready", mode_button.port->name);
 		return -1;
 	}
 
-	return 0;
-}
-
-static int configure_right_button() {
-	/* Setup button 1 to clear the time count */
-	if (gpio_is_ready_dt(&right_button)) {
-		int err;
-
-		err = gpio_pin_configure_dt(&right_button, GPIO_INPUT);
-		if (err) {
-			LOG_ERR("Failed to configure button gpio: %d", err);
-			return -1;
-		}
-
-		gpio_init_callback(&button_callback_right, button_right_callback, 
-			BIT(right_button.pin));
-				   		   
-
-		err = gpio_add_callback(right_button.port, &button_callback_right);
-		if (err) {
-			LOG_ERR("Failed to add button callback: %d", err);
-			return -1;
-		}
-
-		err = gpio_pin_interrupt_configure_dt(&right_button,
-						      				  GPIO_INT_EDGE_TO_ACTIVE);
-		if (err) {
-			LOG_ERR("Failed to enable button callback: %d", err);
-			return -1;
-		}
-	} else {
-		LOG_ERR("Button device %s is not ready", right_button.port->name);
+	err = gpio_pin_configure_dt(&mode_button, GPIO_INPUT);
+	if (err) {
+		LOG_ERR("Failed to configure mode button gpio: %d", err);
 		return -1;
 	}
 
-	return 0;
-}
+	gpio_init_callback(&button_callback_mode, button_mode_callback,
+		BIT(mode_button.pin));
 
-static int configure_up_button() {
-	/* Setup button 1 to clear the time count */
-	if (gpio_is_ready_dt(&up_button)) {
-		int err;
-
-		err = gpio_pin_configure_dt(&up_button, GPIO_INPUT);
-		if (err) {
-			LOG_ERR("Failed to configure button gpio: %d", err);
-			return -1;
-		}
-
-		gpio_init_callback(&button_callback_up, button_up_callback, 
-			BIT(up_button.pin));
-				   		   
-
-		err = gpio_add_callback(up_button.port, &button_callback_up);
-		if (err) {
-			LOG_ERR("Failed to add button callback: %d", err);
-			return -1;
-		}
-
-		err = gpio_pin_interrupt_configure_dt(&up_button,
-						      				  GPIO_INT_EDGE_TO_ACTIVE);
-		if (err) {
-			LOG_ERR("Failed to enable button callback: %d", err);
-			return -1;
-		}
-	} else {
-		LOG_ERR("Button device %s is not ready", up_button.port->name);
+	err = gpio_add_callback(mode_button.port, &button_callback_mode);
+	if (err) {
+		LOG_ERR("Failed to add mode button callback: %d", err);
 		return -1;
 	}
 
-	return 0;
-}
-
-static int configure_down_button() {
-	/* Setup button 1 to clear the time count */
-	if (gpio_is_ready_dt(&down_button)) {
-		int err;
-
-		err = gpio_pin_configure_dt(&down_button, GPIO_INPUT);
-		if (err) {
-			LOG_ERR("Failed to configure button gpio: %d", err);
-			return -1;
-		}
-
-		gpio_init_callback(&button_callback_down, button_down_callback, 
-			BIT(down_button.pin));
-				   		   
-
-		err = gpio_add_callback(down_button.port, &button_callback_down);
-		if (err) {
-			LOG_ERR("Failed to add button callback: %d", err);
-			return -1;
-		}
-
-		err = gpio_pin_interrupt_configure_dt(&down_button,
-						      				  GPIO_INT_EDGE_TO_ACTIVE);
-		if (err) {
-			LOG_ERR("Failed to enable button callback: %d", err);
-			return -1;
-		}
-	} else {
-		LOG_ERR("Button device %s is not ready", down_button.port->name);
+	err = gpio_pin_interrupt_configure_dt(&mode_button,
+					      				  GPIO_INT_EDGE_TO_ACTIVE);
+	if (err) {
+		LOG_ERR("Failed to enable mode button callback: %d", err);
 		return -1;
 	}
 
@@ -327,28 +202,10 @@ static int configure_device() {
 		return -1;
 	}
 
-	/*configure left btn*/
-	ret = configure_left_button();
+	/*configure mode btn*/
+	ret = configure_mode_button();
 	if (ret < 0) {
-		LOG_ERR("Failed to configure left button");
-		return -1;
-	}
-	/*configure right btn*/
-	ret = configure_right_button();
-	if (ret < 0) {
-		LOG_ERR("Failed to configure right button");
-		return -1;
-	}
-	/*configure up btn*/
-	ret = configure_up_button();
-	if (ret < 0) {
-		LOG_ERR("Failed to configure up button");
-		return -1;
-	}
-	/*configure down btn*/
-	ret = configure_down_button();
-	if (ret < 0) {
-		LOG_ERR("Failed to configure down button");
+		LOG_ERR("Failed to configure mode button");
 		return -1;
 	}
 	
@@ -357,10 +214,35 @@ static int configure_device() {
 	return 0;
 }
 
+static void move_circle() {
+	int pin_status = use_callback ? get_status() : get_pin_status();
+	if (pin_status != 0) {
+		LOG_INF("Pin status: %d", pin_status);
+	}
+	
+	if (pin_status & 4) { 
+		move_circle_left();
+	}
+	if (pin_status & 8) { 
+		move_circle_right();
+	}
+	if (pin_status & 1) { 
+		move_circle_up();
+	}
+	if (pin_status & 2) { 
+		move_circle_down();
+	}	
+}
+
 int main(void) {
 	int ret = configure_device();
 	if (ret < 0) {
 		LOG_ERR("Could not configure the device");
+		return -1;
+	}
+	ret = configure_receiver();
+	if (ret < 0) {
+		LOG_ERR("Could not configure the receiver");
 		return -1;
 	}
 
@@ -386,7 +268,7 @@ int main(void) {
 
 	/* Loop and display increasing time count */
 	while (1) {
-		
+		move_circle();
 		lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);
 		sprintf(count_str, "%d", hit_count);
 		lv_label_set_text(count_label, count_str);
