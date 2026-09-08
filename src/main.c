@@ -117,7 +117,7 @@ static void show_food() {
 	lv_obj_align(food, LV_ALIGN_CENTER, x, y);
 	food_coordinates[0] = x;
 	food_coordinates[1] = y;
-	LOG_INF("New food at [%d, %d].", x, y);
+	LOG_INF("New food at [%d, %d]", x, y);
 }
 
 static int check_collision() {
@@ -145,7 +145,7 @@ static void hide_food() {
 		food_coordinates[0] = 1000; // Move food coordinates out of view
 		food_coordinates[1] = 1000;
 		lv_obj_align(food, LV_ALIGN_CENTER, food_coordinates[0], food_coordinates[1]);
-		LOG_INF("Food hidden.");
+		LOG_INF("Food hidden");
 	}
 }
 
@@ -269,7 +269,7 @@ static int configure_device() {
 		return -1;
 	}
 
-	LOG_INF("Device successfully configured.");
+	LOG_INF("Device successfully configured");
 
 	return 0;
 }
@@ -339,33 +339,39 @@ static void end_game() {
 }
 
 static void play_game() {
+	int food_time = 250;
+	int hunter_time = 750;
 	LOG_INF("Let the game begin...");
 	while (1) {
 		move_player();
 		/* Increment the time count */
 		++time_count;
-		if (time_count == 250) {
+		if (time_count == food_time) {
 			show_food();
-			LOG_INF("New food created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
-		} else if (time_count == 750) {
+			LOG_INF("New food created at [%d, %d]", food_coordinates[0], food_coordinates[1]);
+		} else if (time_count == hunter_time) {
 				create_hunter();
-				LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
+				LOG_INF("Hunter created at [%d, %d]", hunter_coordinates[0], hunter_coordinates[1]);
 		} else if (time_count == 1250) {
 				remove_hunter();
 				time_count = 0;
-				LOG_INF("Hunter removed.");
+				LOG_INF("Hunter removed");
 		} else {
 			if (check_collision()) {			
 				if (is_hunter_active) {
-					LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
+					LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d]", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
 					remove_hunter();
 					time_count = 0;
 					end_game();
 				} else {
-					LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
+					LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d]", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
 					hide_food();
 					hit_count++;
 					time_count = 0;
+					if (hit_count%5 == 0) {
+						food_time = (food_time>0)? (food_time-50): 1;
+						hunter_time = (hunter_time>200)? (hunter_time-50): 200; 
+					}
 				}	
 			} else if (is_hunter_active) {
 				// move the hunter one pxel closer to the player

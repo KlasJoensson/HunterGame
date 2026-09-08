@@ -9,14 +9,14 @@
  * It provides functions to configure the receiver and read pin statuses.
  */
 
-LOG_MODULE_REGISTER(receiver, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(joystick, LOG_LEVEL_INF);
 
-/* P0.05 device (used by read_P1_05) */
-#define P0_05_PORT_NODE DT_NODELABEL(gpio1)
-const struct device *gpio_05 = DEVICE_DT_GET(P0_05_PORT_NODE);
+/* P1.05 device (used by read_P1_05) */
+#define P1_05_PORT_NODE DT_NODELABEL(gpio1)
+const struct device *gpio_05 = DEVICE_DT_GET(P1_05_PORT_NODE);
 #define P1_05_PIN 5
 
-/* P1.07 device (used by read_P1_06) */
+/* P1.06 device (used by read_P1_06) */
 #define P1_06_PORT_NODE DT_NODELABEL(gpio1)
 const struct device *gpio_06 = DEVICE_DT_GET(P1_06_PORT_NODE);
 #define P1_06_PIN 6
@@ -26,7 +26,7 @@ const struct device *gpio_06 = DEVICE_DT_GET(P1_06_PORT_NODE);
 const struct device *gpio_07 = DEVICE_DT_GET(P1_07_PORT_NODE);
 #define P1_07_PIN 7
 
-/* P1.05 device (used by read_P1_08) */
+/* P1.08 device (used by read_P1_08) */
 #define P1_08_PORT_NODE DT_NODELABEL(gpio1)
 const struct device *gpio_08 = DEVICE_DT_GET(P1_08_PORT_NODE);
 #define P1_08_PIN 8
