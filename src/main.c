@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-
 #include <lvgl.h>
 #include "joystick.h"
 
@@ -31,15 +30,22 @@ lv_obj_t *hunter = NULL;
 static int food_coordinates[2] = {1000, 1000};
 static int hunter_coordinates[2] = {1000, 1000};
 static int use_callback = 0;
+static int fire = 0;
 
-char count_str[11] = {0};	
-static lv_style_t my_style;
+char count_str[11] = {0};
+char info_str[21] = {0};	
+static lv_style_t end_txt_style;
+static lv_style_t start_txt_style;
 lv_obj_t *count_label;
+lv_obj_t *info_label;
 lv_obj_t *circle;
 
 static struct gpio_dt_spec mode_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw0), gpios, {0});
+static struct gpio_dt_spec fire_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw1), gpios, {0});
 static struct gpio_callback button_callback_mode;
+static struct gpio_callback button_callback_fire;
 
+static void start_game();
 
 /* Move circle left */
 static void move_circle_left() {
@@ -86,6 +92,17 @@ static void button_mode_callback(const struct device *port,
 	use_callback = !use_callback;
 	LOG_INF("Use callback: %d", use_callback);
 }
+
+static void fire_button_callback(const struct device *port,
+								 struct gpio_callback *cb,
+								 uint32_t pins) {
+	ARG_UNUSED(port);
+	ARG_UNUSED(cb);
+	ARG_UNUSED(pins);
+	LOG_INF("Fake fire button pressed");
+	fire = 1;
+}	
+
 
 static void show_food() {
 	if (food == NULL) {
@@ -188,6 +205,38 @@ static int configure_mode_button() {
 	return 0;
 }
 
+static int configure_fire_button() {
+	int err;
+	if (!gpio_is_ready_dt(&fire_button)) {
+		LOG_ERR("Fire button %s is not ready", fire_button.port->name);
+		return -1;
+	}
+
+	err = gpio_pin_configure_dt(&fire_button, GPIO_INPUT);
+	if (err) {
+		LOG_ERR("Failed to configure fire button gpio: %d", err);
+		return -1;
+	}
+
+	gpio_init_callback(&button_callback_fire, fire_button_callback,
+		BIT(fire_button.pin));
+
+	err = gpio_add_callback(fire_button.port, &button_callback_fire);
+	if (err) {
+		LOG_ERR("Failed to add fire button callback: %d", err);
+		return -1;
+	}
+
+	err = gpio_pin_interrupt_configure_dt(&fire_button,
+					      				  GPIO_INT_EDGE_TO_ACTIVE);
+	if (err) {
+		LOG_ERR("Failed to enable fire button callback: %d", err);
+		return -1;
+	}
+
+	return 0;
+}
+
 static int configure_device() {
 	int ret;
 	const struct device *display_dev;
@@ -213,7 +262,13 @@ static int configure_device() {
 		LOG_ERR("Failed to configure mode button");
 		return -1;
 	}
-	
+	/*configure fire btn*/
+	ret = configure_fire_button();
+	if (ret < 0) {
+		LOG_ERR("Failed to configure fire button");
+		return -1;
+	}
+
 	LOG_INF("Device successfully configured.");
 
 	return 0;
@@ -236,10 +291,117 @@ static void move_circle() {
 	}
 	if (pin_status & 2) { 
 		move_circle_down();
-	}	
+	}
+	lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);	
 }
 
-static void set_up_game() {
+static void show_start_screen() {
+	hit_count = 0;
+	info_label = lv_label_create(lv_screen_active());
+	lv_obj_add_style(info_label, &start_txt_style, LV_STATE_DEFAULT);
+	lv_label_set_text(info_label, "Press fire to start");
+	lv_obj_align(info_label, LV_ALIGN_CENTER, 0, 0);
+	lv_timer_handler();
+	LOG_INF("Start screen up, waiting for button press");
+	int pin_status;
+	while (1) {
+		pin_status = use_callback ? get_status() : get_pin_status();
+		if (pin_status != 0) {
+			LOG_INF("Pin status: %d", pin_status);
+		}
+		if (pin_status == 16) {
+			lv_obj_del(info_label);
+			start_game();
+		} else if (fire) {
+			fire = 0;
+			lv_obj_del(info_label);
+			start_game();
+		}
+	}
+}
+
+static void end_game() {
+	lv_obj_del(circle);
+
+	info_label = lv_label_create(lv_screen_active());
+	lv_obj_add_style(info_label, &end_txt_style, LV_STATE_DEFAULT);
+	lv_label_set_text(info_label, "GAME OVER");
+	lv_obj_align(info_label, LV_ALIGN_CENTER, 0, 0);
+	lv_timer_handler();
+	LOG_INF("Game over!");
+	int pin_status;
+	while (1) {
+		pin_status = use_callback ? get_status() : get_pin_status();
+		if (pin_status != 0) {
+			LOG_INF("Pin status: %d", pin_status);
+		}
+		if (pin_status == 16) {
+			lv_obj_del(info_label);
+			lv_obj_del(count_label);
+			show_start_screen();
+		} else if (fire) {
+			fire = 0;
+			lv_obj_del(info_label);
+			lv_obj_del(count_label);
+			show_start_screen();
+		}
+	}
+}
+
+static void play_game() {
+	LOG_INF("Let the game begin...");
+	while (1) {
+		move_circle();
+		/* Increment the time count */
+		++time_count;
+		if (time_count == 250) {
+			show_food();
+			LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
+		} else if (time_count == 750) {
+				create_hunter();
+				LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
+		} else if (time_count == 1250) {
+				remove_hunter();
+				time_count = 0;
+				LOG_INF("Hunter removed.");
+		} else {
+			if (check_collision()) {			
+				if (is_hunter_active) {
+					LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
+					remove_hunter();
+					time_count = 0;
+					end_game();
+				} else {
+					LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
+					hide_food();
+					hit_count++;
+					time_count = 0;
+				}	
+			} else if (is_hunter_active) {
+				// move the hunter one pxel closer to the circle
+				if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
+					if (hunter_coordinates[0] < offset[0]) {
+						hunter_coordinates[0]++;
+					} else if (hunter_coordinates[0] > offset[0]) {
+						hunter_coordinates[0]--;
+					}
+					if (hunter_coordinates[1] < offset[1]) {
+						hunter_coordinates[1]++;
+					} else if (hunter_coordinates[1] > offset[1]) {
+						hunter_coordinates[1]--;
+					}
+				}
+				lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
+			} 
+		}
+		sprintf(count_str, "%d", hit_count);
+		lv_label_set_text(count_label, count_str);
+		lv_timer_handler();
+		k_sleep(K_USEC(9501));
+	}
+}
+
+static void start_game() {
 	srand(time(NULL));
     /* Create a label to display time count and align it at the bottom center */
 	count_label = lv_label_create(lv_screen_active());
@@ -250,58 +412,14 @@ static void set_up_game() {
 	lv_obj_set_size(circle, 25, 25);
 	lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 	lv_obj_align(circle, LV_ALIGN_CENTER, 0, 0);
-}
-
-static void play_game() {
-	move_circle();
-	lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);
 	sprintf(count_str, "%d", hit_count);
 	lv_label_set_text(count_label, count_str);
 	/* To update the display, call the LVGL timer handler */
 	lv_timer_handler();
-	/* Increment the time count */
-	++time_count;
-	if (time_count == 1000) {
-		show_food();
-		LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
-	} else if (time_count == 1500) {
-			create_hunter();
-			LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
-	} else if (time_count == 2000) {
-			remove_hunter();
-			time_count = 0;
-			LOG_INF("Hunter removed.");
-	} else {
-		if (check_collision()) {			
-			if (is_hunter_active) {
-				LOG_INF("Collision detected when on [%d, %d] with hunter at [%d, %d].", offset[0], offset[1], hunter_coordinates[0], hunter_coordinates[1]);
-				remove_hunter();
-				hit_count--;
-				time_count = 0;
-			} else {
-				LOG_INF("Collision detected when on [%d, %d] with food at [%d, %d].", offset[0], offset[1], food_coordinates[0], food_coordinates[1]);
-				hide_food();
-				hit_count++;
-				time_count = 0;
-			}	
-		} else if (is_hunter_active) {
-			// move the hunter one pxel closer to the circle
-			if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
-				if (hunter_coordinates[0] < offset[0]) {
-					hunter_coordinates[0]++;
-				} else if (hunter_coordinates[0] > offset[0]) {
-					hunter_coordinates[0]--;
-				}
-				if (hunter_coordinates[1] < offset[1]) {
-					hunter_coordinates[1]++;
-				} else if (hunter_coordinates[1] > offset[1]) {
-					hunter_coordinates[1]--;
-				}
-			}
-			lv_obj_align(hunter, LV_ALIGN_CENTER, hunter_coordinates[0], hunter_coordinates[1]);
-		} 
-	}
+	play_game();
 }
+
+
 
 int main(void) {
 	int ret = configure_device();
@@ -309,26 +427,19 @@ int main(void) {
 		LOG_ERR("Could not configure the device");
 		return -1;
 	}
+
 	ret = configure_joystick();
 	if (ret < 0) {
 		LOG_ERR("Could not configure the joystick");
 		return -1;
 	}
 
-	lv_style_init(&my_style);
-	lv_style_set_text_font(&my_style, &lv_font_montserrat_28);
-
-	set_up_game();
-
-	lv_timer_handler();
-
-	/* Loop and display increasing time count */
-	while (1) {
-		play_game();
-
-		/* Delay for 9.501 ms - each loop will represent ~10 ms */
-		k_sleep(K_USEC(9501));
-	}
+	lv_style_init(&end_txt_style);
+	lv_style_set_text_font(&end_txt_style, &lv_font_montserrat_28);
+	lv_style_init(&start_txt_style);
+	lv_style_set_text_font(&start_txt_style, &lv_font_montserrat_22);
+	
+	show_start_screen();
 
 	return 0;
 }

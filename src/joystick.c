@@ -103,54 +103,32 @@ int read_P1_04(void) {
     return gpio_pin_get(gpio_04, P1_04_PIN);
 }
 
-static void stick_up_callback(const struct device *port,
+static void stick_callback(const struct device *port,
 								struct gpio_callback *cb,
 								uint32_t pins) {
 	ARG_UNUSED(port);
 	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
+
+	switch (pins) {
+		case 16: // Pin P1.04: Button pressed
+			status[4] = 1;
+			break;
+		case 64: // Pin P1.06: Stick down
+			status[2] = 1;
+			break;
+		case 32: // Pin P1.05: Stick up
+			status[3] = 1;
+			break;
+		case 128: // Pin P1.07: Stick left
+			status[1] = 1;
+			break;
+		case 256: // Pin P1.08: Stick right
+			status[0] = 1;
+			break;
+		default:
+			break;
+	}
 	
-	status[3] = 1;
-}
-
-static void stick_down_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	status[2] = 1;
-}
-
-static void stick_right_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	status[0] = 1;
-}
-
-static void stick_left_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	status[1] = 1;
-}
-
-static void stick_button_callback(const struct device *port,
-								struct gpio_callback *cb,
-								uint32_t pins) {
-	ARG_UNUSED(port);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	status[4] = 1;
 }
 
 int get_status(void) {
@@ -250,7 +228,7 @@ int configure_joystick(void) {
 			return -1;
 		}
 
-		gpio_init_callback(&callback_up, stick_up_callback, 
+		gpio_init_callback(&callback_up, stick_callback, 
 			BIT(stick_up.pin));
 				   		   
 
@@ -278,7 +256,7 @@ int configure_joystick(void) {
 			return -1;
 		}
 
-		gpio_init_callback(&callback_down, stick_down_callback, 
+		gpio_init_callback(&callback_down, stick_callback, 
 			BIT(stick_down.pin));
 
 		err = gpio_add_callback(stick_down.port, &callback_down);
@@ -305,7 +283,7 @@ int configure_joystick(void) {
 			return -1;
 		}
 
-		gpio_init_callback(&callback_left, stick_left_callback, 
+		gpio_init_callback(&callback_left, stick_callback, 
 			BIT(stick_left.pin));
 
 		err = gpio_add_callback(stick_left.port, &callback_left);
@@ -332,7 +310,7 @@ int configure_joystick(void) {
 			return -1;
 		}
 
-		gpio_init_callback(&callback_right, stick_right_callback, 
+		gpio_init_callback(&callback_right, stick_callback, 
 			BIT(stick_right.pin));
 
 		err = gpio_add_callback(stick_right.port, &callback_right);
@@ -359,7 +337,7 @@ int configure_joystick(void) {
 			return -1;
 		}
 
-		gpio_init_callback(&callback_button, stick_button_callback, 
+		gpio_init_callback(&callback_button, stick_callback, 
 			BIT(stick_button.pin));
 
 		err = gpio_add_callback(stick_button.port, &callback_button);
@@ -378,6 +356,8 @@ int configure_joystick(void) {
 		LOG_ERR("Button %s is not ready", stick_button.port->name);
 		return -1;
 	}
+
+	LOG_INF("Joysick joyfully configured");
 
 	return 0;
 }
