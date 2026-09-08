@@ -29,7 +29,7 @@ lv_obj_t *hunter = NULL;
 // Food coordinates let's say the food is at (1000, 1000) which is outside the display when not displayed.
 static int food_coordinates[2] = {1000, 1000};
 static int hunter_coordinates[2] = {1000, 1000};
-static int use_callback = 0;
+static int use_callback = 1;
 static int fire = 0;
 
 char count_str[11] = {0};
@@ -38,7 +38,7 @@ static lv_style_t end_txt_style;
 static lv_style_t start_txt_style;
 lv_obj_t *count_label;
 lv_obj_t *info_label;
-lv_obj_t *circle;
+lv_obj_t *player;
 
 static struct gpio_dt_spec mode_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw0), gpios, {0});
 static struct gpio_dt_spec fire_button = GPIO_DT_SPEC_GET_OR(DT_ALIAS(sw1), gpios, {0});
@@ -47,8 +47,8 @@ static struct gpio_callback button_callback_fire;
 
 static void start_game();
 
-/* Move circle left */
-static void move_circle_left() {
+/* Move player left */
+static void move_player_left() {
 	offset[0] -= 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[1], 2)));
 	if (offset[0] < -max_offset) {
@@ -56,8 +56,8 @@ static void move_circle_left() {
 	}
 }
 
-/* Move circle right */
-static void move_circle_right() {
+/* Move player right */
+static void move_player_right() {
 	offset[0] += 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[1], 2)));
 	if (offset[0] > max_offset) {
@@ -65,8 +65,8 @@ static void move_circle_right() {
 	}
 }
 
-/* Move circle up */
-static void move_circle_up() {
+/* Move player up */
+static void move_player_up() {
 	offset[1] -= 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[0], 2)));
 	if (offset[1] < -max_offset) {
@@ -74,8 +74,8 @@ static void move_circle_up() {
 	}
 }
 
-/* Move circle down */
-static void move_circle_down() {
+/* Move player down */
+static void move_player_down() {
 	offset[1] += 10;
 	int max_offset = (int)(sqrt(14400 - pow(offset[0], 2)));
 	if (offset[1] > max_offset) {
@@ -117,7 +117,7 @@ static void show_food() {
 	lv_obj_align(food, LV_ALIGN_CENTER, x, y);
 	food_coordinates[0] = x;
 	food_coordinates[1] = y;
-	LOG_INF("New circle at [%d, %d].", x, y);
+	LOG_INF("New food at [%d, %d].", x, y);
 }
 
 static int check_collision() {
@@ -139,18 +139,18 @@ static int check_collision() {
 	
 }
 
-// Move new circle out of view when it is not displayed
+// Move new player out of view when it is not displayed
 static void hide_food() {
 	if (has_food) {
 		food_coordinates[0] = 1000; // Move food coordinates out of view
 		food_coordinates[1] = 1000;
 		lv_obj_align(food, LV_ALIGN_CENTER, food_coordinates[0], food_coordinates[1]);
-		LOG_INF("New circle hidden.");
+		LOG_INF("Food hidden.");
 	}
 }
 
 static void create_hunter() {
-	// create a square at the same place as the circle to represent the hunter
+	// create a square at the same place as the player to represent the hunter
 	if (hunter == NULL) {
 		hunter = lv_obj_create(lv_screen_active());
 		lv_obj_set_size(hunter, 20, 20);
@@ -274,25 +274,25 @@ static int configure_device() {
 	return 0;
 }
 
-static void move_circle() {
+static void move_player() {
 	int pin_status = use_callback ? get_status() : get_pin_status();
 	if (pin_status != 0) {
 		LOG_INF("Pin status: %d", pin_status);
 	}
 	
 	if (pin_status & 4) { 
-		move_circle_left();
+		move_player_left();
 	}
 	if (pin_status & 8) { 
-		move_circle_right();
+		move_player_right();
 	}
 	if (pin_status & 1) { 
-		move_circle_up();
+		move_player_up();
 	}
 	if (pin_status & 2) { 
-		move_circle_down();
+		move_player_down();
 	}
-	lv_obj_align(circle, LV_ALIGN_CENTER, offset[0], offset[1]);	
+	lv_obj_align(player, LV_ALIGN_CENTER, offset[0], offset[1]);	
 }
 
 static void show_start_screen() {
@@ -303,13 +303,8 @@ static void show_start_screen() {
 	lv_obj_align(info_label, LV_ALIGN_CENTER, 0, 0);
 	lv_timer_handler();
 	LOG_INF("Start screen up, waiting for button press");
-	int pin_status;
 	while (1) {
-		pin_status = use_callback ? get_status() : get_pin_status();
-		if (pin_status != 0) {
-			LOG_INF("Pin status: %d", pin_status);
-		}
-		if (pin_status == 16) {
+		if (is_button_pressed()) {
 			lv_obj_del(info_label);
 			start_game();
 		} else if (fire) {
@@ -321,7 +316,7 @@ static void show_start_screen() {
 }
 
 static void end_game() {
-	lv_obj_del(circle);
+	lv_obj_del(player);
 
 	info_label = lv_label_create(lv_screen_active());
 	lv_obj_add_style(info_label, &end_txt_style, LV_STATE_DEFAULT);
@@ -329,13 +324,8 @@ static void end_game() {
 	lv_obj_align(info_label, LV_ALIGN_CENTER, 0, 0);
 	lv_timer_handler();
 	LOG_INF("Game over!");
-	int pin_status;
 	while (1) {
-		pin_status = use_callback ? get_status() : get_pin_status();
-		if (pin_status != 0) {
-			LOG_INF("Pin status: %d", pin_status);
-		}
-		if (pin_status == 16) {
+		if (is_button_pressed()) {
 			lv_obj_del(info_label);
 			lv_obj_del(count_label);
 			show_start_screen();
@@ -351,12 +341,12 @@ static void end_game() {
 static void play_game() {
 	LOG_INF("Let the game begin...");
 	while (1) {
-		move_circle();
+		move_player();
 		/* Increment the time count */
 		++time_count;
 		if (time_count == 250) {
 			show_food();
-			LOG_INF("New circle created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
+			LOG_INF("New food created at [%d, %d].", food_coordinates[0], food_coordinates[1]);
 		} else if (time_count == 750) {
 				create_hunter();
 				LOG_INF("Hunter created at [%d, %d].", hunter_coordinates[0], hunter_coordinates[1]);
@@ -378,7 +368,7 @@ static void play_game() {
 					time_count = 0;
 				}	
 			} else if (is_hunter_active) {
-				// move the hunter one pxel closer to the circle
+				// move the hunter one pxel closer to the player
 				if (time_count % 10 == 0) { // Move the hunter every 10 loops (~100 ms)
 					if (hunter_coordinates[0] < offset[0]) {
 						hunter_coordinates[0]++;
@@ -407,11 +397,11 @@ static void start_game() {
 	count_label = lv_label_create(lv_screen_active());
 	lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-	/* Draw a 25px diameter circle in the middle of the display */
-	circle = lv_obj_create(lv_screen_active());
-	lv_obj_set_size(circle, 25, 25);
-	lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-	lv_obj_align(circle, LV_ALIGN_CENTER, 0, 0);
+	/* Draw a 25px diameter circle in the middle of the display to represent the player */
+	player = lv_obj_create(lv_screen_active());
+	lv_obj_set_size(player, 25, 25);
+	lv_obj_set_style_radius(player, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+	lv_obj_align(player, LV_ALIGN_CENTER, 0, 0);
 	sprintf(count_str, "%d", hit_count);
 	lv_label_set_text(count_label, count_str);
 	/* To update the display, call the LVGL timer handler */

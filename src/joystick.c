@@ -48,6 +48,7 @@ static int pin_status_1 = 0;
 static int pin_status_2 = 0;
 static int pin_status_3 = 0;
 static int pin_status_4 = 0;
+static int btn_pressed = 0;
 
 static int status[5] = {0};
 static struct gpio_callback callback_up;
@@ -112,6 +113,7 @@ static void stick_callback(const struct device *port,
 	switch (pins) {
 		case 16: // Pin P1.04: Button pressed
 			status[4] = 1;
+			btn_pressed = 1;
 			break;
 		case 64: // Pin P1.06: Stick down
 			status[2] = 1;
@@ -131,6 +133,15 @@ static void stick_callback(const struct device *port,
 	
 }
 
+/* Returns 1 if the button was pressed since the last call, 0 otherwise */
+int is_button_pressed(void) {
+	int tmp = btn_pressed;
+	btn_pressed = 0;
+	return tmp;
+}
+
+/* Returns a bitmask representing the status of pins P1.08, P1.06, P1.07, P1.08 
+   and P1.04 with help of a variable set by the callback function */
 int get_status(void) {
 	int result = 0;
 	if (status[0]) {
@@ -157,10 +168,12 @@ int get_status(void) {
 	for (int i = 0; i < 5; i++) {
 		status[i] = 0;
 	}
+	btn_pressed = 0;
 	return result;
 }
 
-/* Returns a bitmask representing the status of pins P1.08, P1.06, P1.07, P1.08 and P1.04 */
+/* Returns a bitmask representing the status of pins P1.08, P1.06, P1.07, P1.08 
+   and P1.04 by reading the pin directly. */
 int get_pin_status(void) {
 	int result = 0;
 	int pin_status = read_P1_05();
@@ -213,6 +226,7 @@ int get_pin_status(void) {
 			LOG_INF("P1.04 ON: Button");
 		}
 		pin_status_4 = pin_status;
+		btn_pressed = pin_status;
 	}
 
 	return result;
@@ -357,7 +371,7 @@ int configure_joystick(void) {
 		return -1;
 	}
 
-	LOG_INF("Joysick joyfully configured");
+	LOG_INF("Joystick joyfully configured");
 
 	return 0;
 }
