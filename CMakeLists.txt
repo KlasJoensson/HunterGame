@@ -3,4 +3,4 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(TestGame)
 
-target_sources(app PRIVATE src/main.c src/joystick.c src/display.c)
+target_sources(app PRIVATE src/main.c src/joystick.c src/display.c src/game.c)

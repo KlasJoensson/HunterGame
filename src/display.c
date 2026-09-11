@@ -48,10 +48,12 @@ void show_info_label(char *text) {
     if (info_label == NULL) {
         info_label = lv_label_create(lv_screen_active());
 	    lv_obj_add_style(info_label, &start_txt_style, LV_STATE_DEFAULT);
+        LOG_INF("Info label created");
     }
 	lv_label_set_text(info_label, text);
 	lv_obj_align(info_label, LV_ALIGN_CENTER, 0, 0);
 	lv_timer_handler();
+    LOG_INF("Info label text set to: %s", text);
 }
 
 void remove_info_label() {
